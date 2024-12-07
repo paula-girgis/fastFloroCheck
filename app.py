@@ -2,12 +2,11 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import tensorflow as tf
+from PIL import Image, UnidentifiedImageError
 import numpy as np
-import cv2
-from aiocache import cached
+import io
 import time
 
-# Initialize FastAPI app
 app = FastAPI()
 
 # Enable CORS middleware (optional, but useful if integrating with frontend)
@@ -20,11 +19,11 @@ app.add_middleware(
 
 # Load the model with error handling
 try:
-    model = tf.keras.models.load_model("best_model.keras")
+    model = tf.keras.models.load_model(r"best_model.keras")
     print("Model loaded successfully!")
 except (OSError, ValueError) as e:
     print(f"Error loading model: {e}")
-    model = None  # Ensure model is None if loading fails
+    model = None  # Set to None to prevent usage if not loaded
 
 # Define the disease classes
 class_indices = {
@@ -50,23 +49,26 @@ class_indices = {
     'Tomato Healthy': 19,
     'Tomato Late Blight': 20
 }
+
 class_map = {value: key for key, value in class_indices.items()}
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 def allowed_file(filename: str) -> bool:
+    """Check if the file has a valid extension"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Efficient image preprocessing with OpenCV
 def preprocess_image(file: bytes) -> np.ndarray:
-    img = cv2.imdecode(np.frombuffer(file, np.uint8), cv2.IMREAD_COLOR)
-    img = cv2.resize(img, (224, 224)) / 255.0
-    img_array = np.expand_dims(img, axis=0)
+    """Preprocess the image file and prepare it for prediction"""
+    img = Image.open(io.BytesIO(file))  # Use io.BytesIO to handle in-memory file
+    img = img.resize((224, 224))
+    img_array = np.array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
     return img_array
 
 @app.post("/predict")
-@cached(ttl=300)  # Cache the endpoint for 5 minutes
 async def predict(file: UploadFile = File(...)):
+    """Prediction endpoint"""
     if not allowed_file(file.filename):
         raise HTTPException(
             status_code=400,
@@ -77,6 +79,8 @@ async def predict(file: UploadFile = File(...)):
         # Read the file and preprocess
         content = await file.read()
         img_array = preprocess_image(content)
+    except UnidentifiedImageError:
+        raise HTTPException(status_code=400, detail="Invalid image file. Ensure the file is a valid image.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing image: {e}")
 
@@ -90,7 +94,7 @@ async def predict(file: UploadFile = File(...)):
 
     confidence_scores = prediction[0]
     max_confidence = float(np.max(confidence_scores))
-    predicted_class_idx = int(np.argmax(confidence_scores))
+    predicted_class_idx = np.argmax(confidence_scores)
 
     # Confidence threshold
     threshold = 0.68
