@@ -5,7 +5,6 @@ import tensorflow as tf
 from PIL import Image, UnidentifiedImageError
 import numpy as np
 import io
-import time
 
 app = FastAPI()
 
@@ -88,9 +87,7 @@ async def predict(file: UploadFile = File(...)):
     if model is None:
         raise HTTPException(status_code=500, detail="Model not loaded.")
 
-    start_time = time.time()
     prediction = model.predict(img_array)
-    response_time = round(time.time() - start_time, 2)
 
     confidence_scores = prediction[0]
     max_confidence = float(np.max(confidence_scores))
@@ -101,12 +98,10 @@ async def predict(file: UploadFile = File(...)):
     if max_confidence < threshold:
         raise HTTPException(status_code=400, detail="Invalid photo. Please upload a plant leaf image.")
 
-    # Map predicted class
+    # Return the predicted class directly using class_map
     if predicted_class_idx in class_map:
         return JSONResponse({
-            "predicted_class": class_map[predicted_class_idx],
-            "confidence": max_confidence,
-            "response_time": response_time
+            "predicted_class": class_map[predicted_class_idx]
         })
     else:
         raise HTTPException(status_code=400, detail="Disease not supported yet.")
