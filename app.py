@@ -32,22 +32,25 @@ class_indices = {
     'Bluberry Healthy': 3,
     'Citrus Black Spot': 4,
     'Citrus Canker': 5,
-    'Citrus Healthy': 6,
-    'Corn Gray Leaf Spot': 7,
-    'Corn Northern Leaf Blight': 8,
-    'Grape Healthy': 9,
-    'Pepper,bell Bacterial Spot': 10,
-    'Pepper,bell Healthy': 11,
-    'Potato Early Blight': 12,
-    'Potato Healthy': 13,
-    'Potato Late Blight': 14,
-    'Raspberry Healthy': 15,
-    'Strawberry Healthy': 16,
-    'Strawberry Leaf Scorch': 17,
-    'Tomato Early Blight': 18,
-    'Tomato Healthy': 19,
-    'Tomato Late Blight': 20
+    'Citrus Greening': 6,
+    'Citrus Healthy': 7,
+    'Corn Gray Leaf Spot': 8,
+    'Corn Northern Leaf Blight': 9,
+    'Grape Healthy': 10,
+    'Pepper,bell Bacterial Spot': 11,
+    'Pepper,bell Healthy': 12,
+    'Potato Early Blight': 13,
+    'Potato Healthy': 14,
+    'Potato Late Blight': 15,
+    'Raspberry Healthy': 16,
+    'Strawberry Healthy': 17,
+    'Strawberry Leaf Scorch': 18,
+    'Tomato Early Blight': 19,
+    'Tomato Healthy': 20,
+    'Tomato Late Blight': 21,
+    'Tomato Yellow Leaf Curl Virus': 22
 }
+
 
 class_map = {value: key for key, value in class_indices.items()}
 
@@ -94,9 +97,9 @@ async def predict(file: UploadFile = File(...)):
     predicted_class_idx = np.argmax(confidence_scores)
 
     # Confidence threshold
-    threshold = 0.68
+    threshold = 0.8
     if max_confidence < threshold:
-        raise HTTPException(status_code=400, detail="Invalid photo. Please upload a plant leaf image.")
+        raise HTTPException(status_code=400, detail="Invalid photo. Please upload a Clear plant leaf image.")
 
     # Return the predicted class directly using class_map
     if predicted_class_idx in class_map:
@@ -106,6 +109,12 @@ async def predict(file: UploadFile = File(...)):
     else:
         raise HTTPException(status_code=400, detail="Disease not supported yet.")
 
-@app.get("/")
-async def root():
-    return {"message": "Welcome to the Plant Disease Detection API!"}
+
+# Custom 404 error handler using a wildcard route
+@app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+async def catch_all_routes(path_name: str):
+    if path_name != "predict":
+        raise HTTPException(
+            status_code=404,
+            detail="This endpoint is not available",
+        )
