@@ -5,13 +5,17 @@ import tensorflow as tf
 from PIL import Image, UnidentifiedImageError
 import numpy as np
 import io
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 app = FastAPI()
 
-# Enable CORS middleware (optional, but useful if integrating with frontend)
+# Enable CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Update with your frontend's origin if required
+    allow_origins=["*"],  # Restrict to specific origins for security if needed
     allow_methods=["*"],
     allow_headers=["*"]
 )
@@ -19,10 +23,10 @@ app.add_middleware(
 # Load the model with error handling
 try:
     model = tf.keras.models.load_model(r"best_model.keras")
-    print("Model loaded successfully!")
+    logging.info("Model loaded successfully!")
 except (OSError, ValueError) as e:
-    print(f"Error loading model: {e}")
-    model = None  # Set to None to prevent usage if not loaded
+    logging.error(f"Error loading model: {e}")
+    model = None  # Prevent usage if not loaded
 
 # Define the disease classes
 class_indices = {
@@ -51,9 +55,7 @@ class_indices = {
     'Tomato Yellow Leaf Curl Virus': 22
 }
 
-
 class_map = {value: key for key, value in class_indices.items()}
-
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 def allowed_file(filename: str) -> bool:
@@ -62,16 +64,21 @@ def allowed_file(filename: str) -> bool:
 
 def preprocess_image(file: bytes) -> np.ndarray:
     """Preprocess the image file and prepare it for prediction"""
-    img = Image.open(io.BytesIO(file))  # Use io.BytesIO to handle in-memory file
-    img = img.resize((224, 224))
-    img_array = np.array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    return img_array
+    try:
+        img = Image.open(io.BytesIO(file))
+        img = img.resize((224, 224))
+        img_array = np.array(img) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
+        return img_array
+    except Exception as e:
+        logging.error(f"Error preprocessing image: {e}")
+        raise
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     """Prediction endpoint"""
     if not allowed_file(file.filename):
+        logging.warning(f"Invalid file type: {file.filename}")
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file type. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"
@@ -82,39 +89,39 @@ async def predict(file: UploadFile = File(...)):
         content = await file.read()
         img_array = preprocess_image(content)
     except UnidentifiedImageError:
-        raise HTTPException(status_code=400, detail="Invalid image file. Ensure the file is a valid image.")
+        raise HTTPException(status_code=400, detail="Invalid image file. Please upload a valid image.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing image: {e}")
 
-    # Predict with the model
     if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded.")
+        raise HTTPException(status_code=500, detail="Model not loaded. Please try again later.")
 
-    prediction = model.predict(img_array)
+    try:
+        prediction = model.predict(img_array)
+        confidence_scores = prediction[0]
+        max_confidence = float(np.max(confidence_scores))
+        predicted_class_idx = np.argmax(confidence_scores)
 
-    confidence_scores = prediction[0]
-    max_confidence = float(np.max(confidence_scores))
-    predicted_class_idx = np.argmax(confidence_scores)
+        threshold = 0.8
+        if max_confidence < threshold:
+            logging.info("Confidence below threshold for prediction.")
+            raise HTTPException(status_code=400, detail="Unclear image. Please upload a clear plant leaf image.")
 
-    # Confidence threshold
-    threshold = 0.8
-    if max_confidence < threshold:
-        raise HTTPException(status_code=400, detail="Invalid photo. Please upload a Clear plant leaf image.")
+        if predicted_class_idx in class_map:
+            predicted_class = class_map[predicted_class_idx]
+            logging.info(f"Prediction successful: {predicted_class}")
+            return JSONResponse({"predicted_class": predicted_class, "confidence": max_confidence})
+        else:
+            raise HTTPException(status_code=400, detail="Disease not supported yet.")
+    except Exception as e:
+        logging.error(f"Error during prediction: {e}")
+        raise HTTPException(status_code=500, detail="Prediction error. Please try again later.")
 
-    # Return the predicted class directly using class_map
-    if predicted_class_idx in class_map:
-        return JSONResponse({
-            "predicted_class": class_map[predicted_class_idx]
-        })
-    else:
-        raise HTTPException(status_code=400, detail="Disease not supported yet.")
-
-
-# Custom 404 error handler using a wildcard route
 @app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def catch_all_routes(path_name: str):
     if path_name != "predict":
+        logging.warning(f"Unhandled route accessed: {path_name}")
         raise HTTPException(
             status_code=404,
-            detail="This endpoint is not available",
+            detail="This endpoint is not available.",
         )
