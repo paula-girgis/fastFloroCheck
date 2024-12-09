@@ -110,7 +110,7 @@ async def predict(file: UploadFile = File(...)):
         if predicted_class_idx in class_map:
             predicted_class = class_map[predicted_class_idx]
             logging.info(f"Prediction successful: {predicted_class}")
-            return JSONResponse({"predicted_class": predicted_class, "confidence": max_confidence})
+            return JSONResponse({"predicted_class": predicted_class})
         else:
             raise HTTPException(status_code=400, detail="Disease not supported yet.")
     except Exception as e:
