@@ -29,7 +29,32 @@ except (OSError, ValueError) as e:
     model = None
 
 # Define the disease classes
-class_indices = { ... }  # Keep your class mapping
+class_indices = {
+    'Apple Cedar Rust': 0,
+    'Apple Healthy': 1,
+    'Apple Scab': 2,
+    'Bluberry Healthy': 3,
+    'Citrus Black Spot': 4,
+    'Citrus Canker': 5,
+    'Citrus Greening': 6,
+    'Citrus Healthy': 7,
+    'Corn Gray Leaf Spot': 8,
+    'Corn Northern Leaf Blight': 9,
+    'Grape Healthy': 10,
+    'Pepper,bell Bacterial Spot': 11,
+    'Pepper,bell Healthy': 12,
+    'Potato Early Blight': 13,
+    'Potato Healthy': 14,
+    'Potato Late Blight': 15,
+    'Raspberry Healthy': 16,
+    'Strawberry Healthy': 17,
+    'Strawberry Leaf Scorch': 18,
+    'Tomato Early Blight': 19,
+    'Tomato Healthy': 20,
+    'Tomato Late Blight': 21,
+    'Tomato Yellow Leaf Curl Virus': 22
+}
+
 class_map = {value: key for key, value in class_indices.items()}
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
