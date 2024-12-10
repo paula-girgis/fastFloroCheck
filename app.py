@@ -102,7 +102,7 @@ async def predict(file: UploadFile = File(...)):
         max_confidence = float(np.max(confidence_scores))
         predicted_class_idx = np.argmax(confidence_scores)
 
-        threshold = 0.7
+        threshold = 0.4
         if max_confidence < threshold:
             logging.info("Confidence below threshold for prediction.")
             raise HTTPException(status_code=400, detail="Unclear image. Please upload a clear plant leaf image.")
