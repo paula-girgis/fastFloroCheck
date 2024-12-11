@@ -1,18 +1,15 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, status
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import tensorflow as tf
 from PIL import Image
 import numpy as np
 import io
-import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
+# Initialize FastAPI app
 app = FastAPI()
 
-# Enable CORS middleware
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,121 +17,101 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Load the model with error handling
+# Load the TensorFlow model once during app startup
 try:
     model = tf.keras.models.load_model("best_model.keras")
-    logging.info("Model loaded successfully!")
-except (OSError, ValueError) as e:
-    logging.error(f"Error loading model: {e}")
+    # Pre-run a dummy input to optimize the graph
+    dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
+    model.predict(dummy_input)
+except Exception:
     model = None
 
-# Define the disease classes
-class_indices = {
-    'Apple Cedar Rust': 0,
-    'Apple Healthy': 1,
-    'Apple Scab': 2,
-    'Bluberry Healthy': 3,
-    'Citrus Black Spot': 4,
-    'Citrus Canker': 5,
-    'Citrus Greening': 6,
-    'Citrus Healthy': 7,
-    'Corn Gray Leaf Spot': 8,
-    'Corn Northern Leaf Blight': 9,
-    'Grape Healthy': 10,
-    'Pepper,bell Bacterial Spot': 11,
-    'Pepper,bell Healthy': 12,
-    'Potato Early Blight': 13,
-    'Potato Healthy': 14,
-    'Potato Late Blight': 15,
-    'Raspberry Healthy': 16,
-    'Strawberry Healthy': 17,
-    'Strawberry Leaf Scorch': 18,
-    'Tomato Early Blight': 19,
-    'Tomato Healthy': 20,
-    'Tomato Late Blight': 21,
-    'Tomato Yellow Leaf Curl Virus': 22
+# Disease class mapping
+class_map = {
+    0: 'Apple Cedar Rust',
+    1: 'Apple Healthy',
+    2: 'Apple Scab',
+    3: 'Bluberry Healthy',
+    4: 'Citrus Black Spot',
+    5: 'Citrus Canker',
+    6: 'Citrus Greening',
+    7: 'Citrus Healthy',
+    8: 'Corn Gray Leaf Spot',
+    9: 'Corn Northern Leaf Blight',
+    10: 'Grape Healthy',
+    11: 'Pepper, Bell Bacterial Spot',
+    12: 'Pepper, Bell Healthy',
+    13: 'Potato Early Blight',
+    14: 'Potato Healthy',
+    15: 'Potato Late Blight',
+    16: 'Raspberry Healthy',
+    17: 'Strawberry Healthy',
+    18: 'Strawberry Leaf Scorch',
+    19: 'Tomato Early Blight',
+    20: 'Tomato Healthy',
+    21: 'Tomato Late Blight',
+    22: 'Tomato Yellow Leaf Curl Virus'
 }
 
-class_map = {value: key for key, value in class_indices.items()}
+# Allowed file extensions
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
-def allowed_file(filename: str) -> bool:
-    """Check if the file has a valid extension."""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 def preprocess_image(file: bytes) -> np.ndarray:
-    """Preprocess the image file and prepare it for prediction."""
+    """Prepare image for prediction."""
     try:
-        img = Image.open(io.BytesIO(file))
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-        img = img.resize((224, 224))
+        img = Image.open(io.BytesIO(file)).convert("RGB").resize((224, 224))
         img_array = np.array(img) / 255.0
-        img_array = np.expand_dims(img_array, axis=0)
-        return img_array
-    except Exception as e:
-        logging.error(f"Error preprocessing image: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid image file."
-        )
+        return np.expand_dims(img_array, axis=0)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image file.")
+
+def calculate_green_percentage(img: Image.Image) -> float:
+    """Calculate the percentage of green pixels in an image."""
+    img_array = np.array(img)
+    green_mask = (
+        (img_array[:, :, 1] > img_array[:, :, 0]) &  # Green channel > Red channel
+        (img_array[:, :, 1] > img_array[:, :, 2]) &  # Green channel > Blue channel
+        (img_array[:, :, 1] > 50)                   # Green channel > Threshold
+    )
+    green_percentage = np.sum(green_mask) / (img_array.shape[0] * img_array.shape[1])
+    return green_percentage * 100
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    """Prediction endpoint."""
-    if not allowed_file(file.filename):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file type. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"
-        )
+    """Predict plant disease from an uploaded image."""
+    # Validate file extension
+    if file.filename.rsplit('.', 1)[-1].lower() not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Invalid file type. Allowed: PNG, JPG, JPEG.")
 
-    try:
-        content = await file.read()
-        img_array = preprocess_image(content)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Image preprocessing failed: {e}"
-        )
+    # Read and preprocess the image
+    content = await file.read()
+    img = Image.open(io.BytesIO(content)).convert("RGB")
 
+    # Filter based on green color percentage
+    green_percentage = calculate_green_percentage(img)
+    if green_percentage < 9.19:
+        raise HTTPException(status_code=400, detail="Unclear image. Please upload a clear plant leaf image")
+
+    img_array = preprocess_image(content)
+
+    # Ensure the model is loaded
     if model is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Model not loaded. Please try again later."
-        )
+        raise HTTPException(status_code=500, detail="Model not loaded.")
 
-    try:
-        prediction = model.predict(img_array)
-        confidence_scores = prediction[0]
-        max_confidence = float(np.max(confidence_scores))
-        predicted_class_idx = np.argmax(confidence_scores)
+    # Predict and interpret the results
+    predictions = model.predict(img_array, verbose=0)
+    confidence = float(np.max(predictions[0]))
+    predicted_class_idx = int(np.argmax(predictions[0]))
 
-        threshold = 0.4
-        if max_confidence < threshold:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unclear image. Please upload a clear plant leaf image."
-            )
+    # Handle low-confidence predictions
+    if confidence < 0.53:
+        raise HTTPException(status_code=400, detail="Unclear image. Please upload a clear plant leaf image")
 
-        if predicted_class_idx in class_map:
-            predicted_class = class_map[predicted_class_idx]
-            return JSONResponse({"predicted_class": predicted_class})
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Disease not supported yet."
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Prediction error: {e}"
-        )
+    predicted_class = class_map.get(predicted_class_idx, "Disease not supported")
+    return {"predicted_class": predicted_class}
 
-@app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+# Catch-all route for undefined endpoints
+@app.api_route("/{path_name:path}")
 async def catch_all_routes(path_name: str):
-    """Catch-all route for undefined endpoints."""
-    logging.warning(f"Unhandled route accessed: {path_name}")
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"The endpoint '/{path_name}' does not exist. Please check the URL."
-    )
+    """Handle undefined endpoints."""
+    raise HTTPException(status_code=404, detail="Endpoint not found.")
