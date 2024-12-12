@@ -4,15 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import tensorflow as tf
 from PIL import Image
 import numpy as np
-from pydantic import BaseModel
-import google.generativeai as genai
 import io
-
-# Configure the Generative AI model
-genai.configure(api_key="AIzaSyCNoCBpW21-5V7SPgJ1duIBKjYSxybbeM4")
-generative_model = genai.GenerativeModel("gemini-2.0-flash-exp")
-
-
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -118,32 +110,6 @@ async def predict(file: UploadFile = File(...)):
     predicted_class = class_map.get(predicted_class_idx, "Disease not supported")
     return {"predicted_class": predicted_class}
 
-@app.get("/list_models")
-async def list_models():
-    try:
-        models = genai.list_models()
-        return {"available_models": [model.name for model in models]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching models: {str(e)}")
-
-# Define a Pydantic model for the request body
-class ChatRequest(BaseModel):
-    user_input: str
-
-@app.post("/chat")
-async def chatbot(request: ChatRequest):
-    user_input = request.user_input.strip()  # Access the input from the request body
-    if not user_input:
-        raise HTTPException(status_code=400, detail="Input or image is required.")
-
-    try:
-        # Process image if available
-        # Generate response using Generative AI
-        response = generative_model.generate_content(user_input)
-        return {"response": response.text}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating response: {str(e)}")
-    
 # Catch-all route for undefined endpoints
 @app.api_route("/{path_name:path}")
 async def catch_all_routes(path_name: str):
