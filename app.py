@@ -89,7 +89,7 @@ async def predict(file: UploadFile = File(...)):
 
     # Filter based on green color percentage
     green_percentage = calculate_green_percentage(img)
-    if green_percentage < 9.19:
+    if green_percentage < 19.5:
         raise HTTPException(status_code=400, detail="Unclear image. Please upload a clear plant leaf image")
 
     img_array = preprocess_image(content)
@@ -105,7 +105,7 @@ async def predict(file: UploadFile = File(...)):
 
     # Handle low-confidence predictions
     if confidence < 0.53:
-        raise HTTPException(status_code=400, detail="Unclear image. Please upload a clear plant leaf image")
+        raise HTTPException(status_code=400, detail="UnRecognise Diseases Please Retake Another pic for that Plant")
 
     predicted_class = class_map.get(predicted_class_idx, "Disease not supported")
     return {"predicted_class": predicted_class}
