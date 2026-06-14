@@ -5,6 +5,7 @@ import tensorflow as tf
 from PIL import Image
 import numpy as np
 import io
+import os
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -12,7 +13,7 @@ app = FastAPI()
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"]
 )
