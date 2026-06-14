@@ -81,7 +81,8 @@ def calculate_green_percentage(img: Image.Image) -> float:
 async def predict(file: UploadFile = File(...)):
     """Predict plant disease from an uploaded image."""
     # Validate file extension
-    if file.filename.rsplit('.', 1)[-1].lower() not in ALLOWED_EXTENSIONS:
+    if not file.filename or '.' not in file.filename or \
+       file.filename.rsplit('.', 1)[-1].lower() not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Invalid file type. Allowed: PNG, JPG, JPEG.")
 
     # Read and preprocess the image
