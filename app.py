@@ -96,7 +96,7 @@ async def predict(file: UploadFile = File(...)):
 
     # Ensure the model is loaded
     if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded.")
+        raise HTTPException(status_code=503, detail="Model not loaded.")
 
     # Predict and interpret the results
     predictions = model.predict(img_array, verbose=0)
