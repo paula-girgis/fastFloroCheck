@@ -5,6 +5,7 @@ import tensorflow as tf
 from PIL import Image
 import numpy as np
 import io
+import logging
 import os
 
 # Initialize FastAPI app
@@ -25,6 +26,7 @@ try:
     dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
     model.predict(dummy_input)
 except Exception:
+    logging.getLogger(__name__).exception("FloraCheck model failed to load or warm up.")
     model = None
 
 # Disease class mapping

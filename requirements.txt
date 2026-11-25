@@ -4,6 +4,7 @@ anyio==4.7.0
 charset-normalizer==3.4.0
 fastapi==0.115.6
 h11==0.14.0
+keras==3.5.0
 numpy==2.0.2
 Pillow==11.0.0
 pydantic==2.10.3
